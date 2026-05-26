@@ -1,0 +1,75 @@
+body {
+  font-family: "Segoe UI", Arial, sans-serif;
+  line-height: 1.75;
+  color: #2b2b2b;
+  background-color: #fbfcfe;
+}
+
+h1 {
+  color: #12355b;
+  font-weight: 700;
+  border-bottom: 3px solid #2e86ab;
+  padding-bottom: 8px;
+  margin-top: 35px;
+}
+
+h2 {
+  color: #1b998b;
+  font-weight: 650;
+  margin-top: 28px;
+}
+
+h3 {
+  color: #264653;
+  font-weight: 600;
+}
+
+.cover-box {
+  background: linear-gradient(135deg, #e8f3ff, #f7fbff);
+  border-left: 7px solid #2e86ab;
+  padding: 22px;
+  border-radius: 14px;
+  margin: 20px 0 25px 0;
+  box-shadow: 0 3px 12px rgba(0,0,0,0.08);
+}
+
+.identity-card {
+  background-color: #ffffff;
+  border: 1px solid #d9e2ec;
+  border-radius: 12px;
+  padding: 18px;
+  margin: 18px 0;
+  box-shadow: 0 2px 8px rgba(0,0,0,0.05);
+}
+
+.insight-box {
+  background-color: #fff7e6;
+  border-left: 6px solid #f4a261;
+  padding: 16px;
+  border-radius: 10px;
+  margin: 18px 0;
+}
+
+.analysis-box {
+  background-color: #eefaf8;
+  border-left: 6px solid #1b998b;
+  padding: 16px;
+  border-radius: 10px;
+  margin: 18px 0 25px 0;
+}
+
+pre {
+  border-radius: 8px;
+  background-color: #f4f6f8;
+}
+
+.table, table {
+  background-color: white;
+  border-radius: 8px;
+}
+
+caption {
+  color: #12355b;
+  font-weight: bold;
+  margin-bottom: 8px;
+}
