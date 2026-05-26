@@ -1,0 +1,396 @@
+---
+title: "Analisis Popularitas dan Kontribusi Pendapatan Genre Film pada Database Sakila"
+author: "Nama: Faza Salsabila| NIM: M0725039 | Kelas: E"
+date: "`r Sys.Date()`"
+output:
+  html_document:
+    toc: true
+    toc_float: true
+    theme: flatly
+    code_folding: show
+---
+
+<style>
+body {
+  font-family: 'Segoe UI', Arial, sans-serif;
+  line-height: 1.7;
+}
+
+h1, h2, h3 {
+  color: #1f4e79;
+  font-weight: 700;
+}
+
+.title {
+  color: #16324f;
+  font-weight: bold;
+}
+
+blockquote {
+  background-color: #f4f8fb;
+  border-left: 5px solid #1f77b4;
+  padding: 12px 18px;
+}
+
+.keterangan {
+  background-color: #eef6ff;
+  padding: 15px;
+  border-radius: 10px;
+  border-left: 5px solid #2c7fb8;
+  margin-bottom: 20px;
+}
+
+.kesimpulan {
+  background-color: #f0fff4;
+  padding: 15px;
+  border-radius: 10px;
+  border-left: 5px solid #31a354;
+}
+</style>
+
+```{r setup, message=FALSE, warning=FALSE}
+library(DBI)
+library(RMySQL)
+library(dplyr)
+library(ggplot2)
+library(scales)
+library(knitr)
+```
+
+# 1. Identitas
+
+<div class="keterangan">
+<strong>Nama:</strong> Faza Salsabila  
+<strong>NIM:</strong> M0725039  
+<strong>Kelas:</strong> E  
+<strong>Dataset:</strong> Sakila Database  
+<strong>Insight:</strong> Apakah genre film yang populer selalu menghasilkan pendapatan yang besar?
+</div>
+
+# 2. Pendahuluan
+
+## 2.1 Latar Belakang
+
+Dalam industri penyewaan film, pemahaman terhadap genre yang diminati pelanggan sangat penting untuk membantu perusahaan menentukan strategi bisnis. Genre film yang sering disewa menunjukkan tingkat popularitas yang tinggi. Namun, genre yang populer belum tentu selalu memberikan pendapatan terbesar bagi perusahaan.
+
+Database **Sakila** merupakan database contoh dari MySQL yang menggambarkan sistem penyewaan film. Database ini memiliki beberapa tabel yang saling berhubungan, seperti data film, kategori film, transaksi penyewaan, dan pembayaran. Oleh karena itu, database Sakila dapat digunakan untuk menganalisis hubungan antara popularitas genre film dan pendapatan yang dihasilkan.
+
+Pada laporan ini, analisis difokuskan pada genre film berdasarkan jumlah rental dan total pendapatan. Insight utama yang ingin diperoleh adalah apakah genre yang paling sering disewa juga menjadi genre yang paling menguntungkan.
+
+## 2.2 Rumusan Masalah
+
+1. Genre film apa yang memiliki jumlah rental tertinggi?
+2. Genre film apa yang menghasilkan pendapatan terbesar?
+3. Berapa besar kontribusi pendapatan setiap genre terhadap total pendapatan?
+4. Apakah terdapat hubungan antara jumlah rental dan total pendapatan genre film?
+
+## 2.3 Tujuan Analisis
+
+1. Mengidentifikasi genre film yang paling populer berdasarkan jumlah rental.
+2. Mengidentifikasi genre film dengan total pendapatan terbesar.
+3. Menghitung persentase kontribusi pendapatan setiap genre.
+4. Menganalisis hubungan antara popularitas genre dan pendapatan menggunakan korelasi Pearson.
+
+# 3. Koneksi Database
+
+Bagian ini digunakan untuk menghubungkan R dengan database MySQL Sakila. Sesuaikan `user`, `password`, dan `host` dengan konfigurasi MySQL masing-masing.
+
+```{r koneksi-database, message=FALSE, warning=FALSE}
+con <- dbConnect(
+  RMySQL::MySQL(),
+  dbname = "sakila",
+  host = "localhost",
+  user = "root",
+  password = "@Zaxsbila173"
+)
+```
+
+# 4. Pengambilan Data
+
+Tabel yang digunakan dalam analisis ini adalah:
+
+| Tabel | Fungsi |
+|---|---|
+| `category` | Menyimpan nama kategori atau genre film |
+| `film_category` | Menghubungkan film dengan genre |
+| `inventory` | Menyimpan data stok film |
+| `rental` | Menyimpan data transaksi penyewaan |
+| `payment` | Menyimpan data pembayaran |
+
+Data dari tabel-tabel tersebut perlu digabungkan karena informasi genre, rental, dan pembayaran tidak berada dalam satu tabel yang sama.
+
+
+## 4.1 Data Popularitas Genre
+
+Data ini digunakan untuk menghitung jumlah rental setiap genre film.
+
+```{r query-popularitas}
+genre_populer <- dbGetQuery(con, "
+SELECT
+    c.name AS genre,
+    COUNT(r.rental_id) AS jumlah_rental
+FROM category c
+JOIN film_category fc
+    ON c.category_id = fc.category_id
+JOIN inventory i
+    ON fc.film_id = i.film_id
+JOIN rental r
+    ON i.inventory_id = r.inventory_id
+GROUP BY c.name
+ORDER BY jumlah_rental DESC;
+")
+
+kable(genre_populer)
+```
+
+## 4.2 Data Pendapatan Genre
+
+Data ini digunakan untuk menghitung total pendapatan setiap genre film.
+
+```{r query-pendapatan}
+genre_pendapatan <- dbGetQuery(con, "
+SELECT
+    c.name AS genre,
+    SUM(p.amount) AS total_pendapatan
+FROM category c
+JOIN film_category fc
+    ON c.category_id = fc.category_id
+JOIN inventory i
+    ON fc.film_id = i.film_id
+JOIN rental r
+    ON i.inventory_id = r.inventory_id
+JOIN payment p
+    ON r.rental_id = p.rental_id
+GROUP BY c.name
+ORDER BY total_pendapatan DESC;
+")
+
+kable(genre_pendapatan)
+```
+
+## 4.3 Penggabungan Data
+
+Data jumlah rental dan total pendapatan digabungkan berdasarkan variabel `genre`.
+
+```{r gabung-data}
+genre_gabungan <- genre_populer %>%
+  left_join(genre_pendapatan, by = "genre") %>%
+  mutate(
+    kontribusi_pendapatan = total_pendapatan / sum(total_pendapatan) * 100,
+    rata_rata_pendapatan = total_pendapatan / jumlah_rental
+  ) %>%
+  arrange(desc(total_pendapatan))
+
+kable(genre_gabungan, digits = 2)
+```
+
+# 5. Analisis dan Visualisasi Data
+
+## 5.1 Analisis Popularitas Genre
+
+Popularitas genre dihitung berdasarkan jumlah transaksi rental. Semakin tinggi jumlah rental, semakin populer genre tersebut di kalangan pelanggan.
+
+```{r visualisasi-popularitas, fig.width=8, fig.height=5}
+ggplot(genre_populer,
+       aes(x = reorder(genre, jumlah_rental),
+           y = jumlah_rental)) +
+  geom_col(fill = "#4E79A7") +
+  coord_flip() +
+  labs(
+    title = "Jumlah Rental Berdasarkan Genre Film",
+    x = "Genre Film",
+    y = "Jumlah Rental"
+  ) +
+  theme_minimal()
+```
+
+**Interpretasi:**  
+Grafik di atas menunjukkan genre film yang paling sering disewa oleh pelanggan. Genre dengan batang paling panjang merupakan genre dengan tingkat popularitas tertinggi. Hasil ini dapat digunakan untuk mengetahui preferensi pelanggan terhadap jenis film tertentu.
+
+## 5.2 Analisis Pendapatan Genre
+
+Pendapatan genre dihitung berdasarkan total pembayaran yang diperoleh dari transaksi rental setiap genre.
+
+```{r visualisasi-pendapatan, fig.width=8, fig.height=5}
+ggplot(genre_pendapatan,
+       aes(x = reorder(genre, total_pendapatan),
+           y = total_pendapatan)) +
+  geom_col(fill = "#59A14F") +
+  coord_flip() +
+  scale_y_continuous(labels = dollar_format(prefix = "$")) +
+  labs(
+    title = "Total Pendapatan Berdasarkan Genre Film",
+    x = "Genre Film",
+    y = "Total Pendapatan"
+  ) +
+  theme_minimal()
+```
+
+**Interpretasi:**  
+Grafik ini menunjukkan genre film yang memberikan pendapatan terbesar. Genre dengan total pendapatan tinggi dapat dianggap sebagai genre yang paling menguntungkan bagi perusahaan.
+
+## 5.3 Analisis Kontribusi Pendapatan
+
+Persentase kontribusi pendapatan digunakan untuk mengetahui seberapa besar sumbangan masing-masing genre terhadap total pendapatan.
+
+Rumus yang digunakan adalah:
+
+\[
+K_i = \frac{R_i}{R_{total}} \times 100\%
+\]
+
+Keterangan:
+
+- \(K_i\) = kontribusi pendapatan genre ke-i
+- \(R_i\) = pendapatan genre ke-i
+- \(R_{total}\) = total pendapatan seluruh genre
+
+```{r visualisasi-kontribusi, fig.width=8, fig.height=5}
+ggplot(genre_gabungan,
+       aes(x = reorder(genre, kontribusi_pendapatan),
+           y = kontribusi_pendapatan)) +
+  geom_col(fill = "#F28E2B") +
+  coord_flip() +
+  labs(
+    title = "Persentase Kontribusi Pendapatan Setiap Genre",
+    x = "Genre Film",
+    y = "Kontribusi Pendapatan (%)"
+  ) +
+  theme_minimal()
+```
+
+```{r top-kontribusi}
+top3_kontribusi <- genre_gabungan %>%
+  arrange(desc(kontribusi_pendapatan)) %>%
+  slice(1:3) %>%
+  summarise(total_kontribusi_top3 = sum(kontribusi_pendapatan))
+
+kable(top3_kontribusi, digits = 2)
+```
+
+**Interpretasi:**  
+Analisis kontribusi menunjukkan persentase pendapatan yang diberikan oleh setiap genre. Jika beberapa genre teratas memberikan kontribusi besar, maka perusahaan dapat memprioritaskan genre tersebut dalam strategi penyediaan film.
+
+## 5.4 Analisis Rata-rata Pendapatan per Rental
+
+Rata-rata pendapatan per rental digunakan untuk mengetahui nilai pendapatan rata-rata yang diperoleh dari satu transaksi rental pada setiap genre.
+
+Rumus yang digunakan adalah:
+
+\[
+\bar{R} = \frac{\text{Total Pendapatan}}{\text{Jumlah Rental}}
+\]
+
+```{r visualisasi-rata-rata, fig.width=8, fig.height=5}
+ggplot(genre_gabungan,
+       aes(x = reorder(genre, rata_rata_pendapatan),
+           y = rata_rata_pendapatan)) +
+  geom_col(fill = "#E15759") +
+  coord_flip() +
+  scale_y_continuous(labels = dollar_format(prefix = "$")) +
+  labs(
+    title = "Rata-rata Pendapatan per Rental Berdasarkan Genre",
+    x = "Genre Film",
+    y = "Rata-rata Pendapatan per Rental"
+  ) +
+  theme_minimal()
+```
+
+**Interpretasi:**  
+Genre dengan rata-rata pendapatan per rental tinggi menunjukkan bahwa setiap transaksi pada genre tersebut memberikan pendapatan yang relatif besar. Analisis ini penting karena genre yang paling sering disewa belum tentu memiliki rata-rata pendapatan tertinggi.
+
+## 5.5 Analisis Korelasi Popularitas dan Pendapatan
+
+Analisis korelasi digunakan untuk mengetahui hubungan antara jumlah rental dan total pendapatan. Variabel yang digunakan adalah:
+
+- \(x\) = jumlah rental
+- \(y\) = total pendapatan
+
+Rumus korelasi Pearson adalah:
+
+\[
+r =
+\frac{
+\sum (x_i-\bar{x})(y_i-\bar{y})
+}
+{
+\sqrt{\sum (x_i-\bar{x})^2}
+\sqrt{\sum (y_i-\bar{y})^2}
+}
+\]
+
+```{r korelasi}
+hasil_korelasi <- cor.test(
+  genre_gabungan$jumlah_rental,
+  genre_gabungan$total_pendapatan
+)
+
+hasil_korelasi
+```
+
+```{r visualisasi-korelasi, fig.width=8, fig.height=5}
+ggplot(genre_gabungan,
+       aes(x = jumlah_rental,
+           y = total_pendapatan,
+           label = genre)) +
+  geom_point(size = 3, color = "#7B4EA3") +
+  geom_text(vjust = -0.7, size = 3) +
+  scale_y_continuous(labels = dollar_format(prefix = "$")) +
+  labs(
+    title = "Hubungan Jumlah Rental dan Total Pendapatan Genre",
+    x = "Jumlah Rental",
+    y = "Total Pendapatan"
+  ) +
+  theme_minimal()
+```
+
+```{r nilai-korelasi}
+nilai_korelasi <- hasil_korelasi$estimate
+p_value <- hasil_korelasi$p.value
+
+nilai_korelasi
+p_value
+```
+
+**Interpretasi:**  
+Nilai korelasi berada pada rentang -1 sampai 1. Jika nilai korelasi mendekati 1, maka hubungan antara jumlah rental dan total pendapatan bersifat positif kuat. Artinya, semakin banyak suatu genre disewa, semakin besar pula pendapatan yang dihasilkan. Jika nilai korelasi mendekati 0, maka hubungan keduanya lemah.
+
+# 6. Pembahasan
+
+Berdasarkan hasil visualisasi dan analisis, dapat dilihat bahwa setiap genre memiliki tingkat popularitas dan kontribusi pendapatan yang berbeda. Genre dengan jumlah rental tertinggi menunjukkan minat pelanggan yang besar, sedangkan genre dengan total pendapatan tertinggi menunjukkan kontribusi finansial yang besar bagi perusahaan.
+
+Analisis kontribusi pendapatan membantu melihat genre mana saja yang menjadi penyumbang utama terhadap total pendapatan. Selain itu, rata-rata pendapatan per rental memberikan sudut pandang tambahan karena dapat menunjukkan genre yang memiliki nilai transaksi lebih tinggi meskipun jumlah rentalnya tidak selalu paling besar.
+
+Analisis korelasi digunakan untuk menjawab insight utama, yaitu apakah genre yang populer selalu menghasilkan pendapatan besar. Jika hasil korelasi positif kuat, maka dapat disimpulkan bahwa popularitas genre cenderung berhubungan dengan besarnya pendapatan. Namun, jika terdapat genre dengan jumlah rental tinggi tetapi pendapatan rata-ratanya rendah, maka hal tersebut menunjukkan bahwa popularitas tidak selalu menjadi satu-satunya faktor penentu pendapatan.
+
+# 7. Kesimpulan
+
+<div class="kesimpulan">
+Berdasarkan analisis yang dilakukan, laporan ini dapat menarik beberapa kesimpulan utama:
+
+1. Genre dengan jumlah rental tertinggi menunjukkan genre yang paling populer di kalangan pelanggan.
+2. Genre dengan total pendapatan tertinggi merupakan genre yang paling besar kontribusinya terhadap pendapatan perusahaan.
+3. Persentase kontribusi pendapatan menunjukkan seberapa besar peran setiap genre dalam total pendapatan.
+4. Rata-rata pendapatan per rental membantu melihat nilai transaksi rata-rata pada setiap genre.
+5. Korelasi Pearson digunakan untuk melihat apakah popularitas genre berhubungan dengan total pendapatan yang dihasilkan.
+
+Secara umum, apabila nilai korelasi menunjukkan hubungan positif yang kuat, maka genre yang lebih populer cenderung menghasilkan pendapatan yang lebih besar. Namun, analisis rata-rata pendapatan dan ranking tetap penting karena genre yang paling sering disewa belum tentu selalu memiliki rata-rata pendapatan tertinggi.
+</div>
+
+# Saran
+
+Berdasarkan hasil analisis, perusahaan penyewaan film dapat mempertimbangkan beberapa strategi berikut:
+
+1. Menambah koleksi film pada genre dengan jumlah rental dan pendapatan tinggi.
+2. Memberikan promosi pada genre dengan jumlah rental rendah agar lebih dikenal pelanggan.
+3. Mempertahankan genre dengan kontribusi pendapatan besar karena genre tersebut berperan penting terhadap pendapatan perusahaan.
+4. Melakukan evaluasi terhadap genre dengan rata-rata pendapatan rendah untuk mengetahui penyebab rendahnya nilai transaksi.
+
+# Penutup
+
+Laporan ini menunjukkan bahwa database Sakila dapat digunakan untuk memperoleh insight bisnis sederhana namun bermakna. Dengan menggunakan SQL, R, visualisasi data, analisis korelasi, HTML, CSS, dan LaTeX, analisis ini dapat memberikan gambaran mengenai hubungan antara popularitas genre film dan kontribusi pendapatan dalam sistem penyewaan film.
+
+```{r tutup-koneksi, include=FALSE}
+dbDisconnect(con)
+```
+
